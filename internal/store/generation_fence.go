@@ -474,9 +474,10 @@ func (r generationRows) Close() error {
 }
 
 func (r generationRows) Next(dest []driver.Value) error {
-	if err := r.generation.checkRead(); err != nil {
-		return err
-	}
+	// The pre-Next probe is redundant: QueryContext probes after the query and
+	// the previous row's post-Next probe covers the window before this row.
+	// Keeping only the post-Next probe preserves row-level detection while
+	// halving the filesystem work on large result sets.
 	err := r.Rows.Next(dest)
 	if generationErr := r.generation.checkRead(); generationErr != nil {
 		return generationErr
