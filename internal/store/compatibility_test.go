@@ -83,7 +83,7 @@ func TestCompatibilityOfflineNeverAuthorizes(t *testing.T) {
 					write("other.db", nil)
 				case "symlink":
 					if err := os.Symlink("engram.db", filepath.Join(dir, "alias.db")); err != nil {
-						t.Fatal(err)
+						t.Skipf("symlink unsupported on this platform: %v", err)
 					}
 				}
 			}

@@ -285,18 +285,18 @@ func TestMigrateCopyRejects(t *testing.T) {
 				dst = filepath.Join(src, "copy")
 			case "symlink":
 				if e := os.Symlink("config.json", filepath.Join(src, "link")); e != nil {
-					t.Fatal(e)
+					t.Skipf("symlink unsupported on this platform: %v", e)
 				}
 			case "source-alias":
 				alias := filepath.Join(copyTempDir(t), "alias")
 				if e := os.Symlink(src, alias); e != nil {
-					t.Fatal(e)
+					t.Skipf("symlink unsupported on this platform: %v", e)
 				}
 				src = alias
 			case "output-alias":
 				parent := filepath.Join(copyTempDir(t), "alias")
 				if e := os.Symlink(copyTempDir(t), parent); e != nil {
-					t.Fatal(e)
+					t.Skipf("symlink unsupported on this platform: %v", e)
 				}
 				dst = filepath.Join(parent, "copy")
 			case "existing-file":
