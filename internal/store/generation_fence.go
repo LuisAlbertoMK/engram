@@ -474,10 +474,10 @@ func (r generationRows) Close() error {
 }
 
 func (r generationRows) Next(dest []driver.Value) error {
-	// The pre-Next probe is redundant: QueryContext probes after the query and
-	// the previous row's post-Next probe covers the window before this row.
-	// Keeping only the post-Next probe preserves row-level detection while
-	// halving the filesystem work on large result sets.
+	// The pre-Next probe is redundant for detection but not for read ordering:
+	// QueryContext probes after the query, and this post-Next probe rejects a
+	// replacement in the same call. A replacement that predates the row read is
+	// therefore detected after the driver read, never returned to the caller.
 	err := r.Rows.Next(dest)
 	if generationErr := r.generation.checkRead(); generationErr != nil {
 		return generationErr
