@@ -1544,16 +1544,10 @@ scan:
 		if opts.Semantic {
 			// In semantic mode, accumulate pairs for the worker pool.
 			// We need the full content for prompt building — fetch from DB.
-			var srcTitle, srcType, srcContent string
-			_ = s.db.QueryRow(
-				`SELECT title, type, ifnull(content,'') FROM observations WHERE sync_id = ?`, obs.syncID,
-			).Scan(&srcTitle, &srcType, &srcContent)
-			srcSnippet := ObservationSnippet{
-				ID:      obs.id,
-				SyncID:  obs.syncID,
-				Title:   srcTitle,
-				Type:    srcType,
-				Content: srcContent,
+			srcSnippet, err := s.scanObservationSnippet(obs.syncID, obs.id)
+			if err != nil {
+				log.Printf("[store] ScanProject: source snippet obs=%s: %v", obs.syncID, err)
+				continue
 			}
 
 			for _, c := range candidates {
@@ -1568,19 +1562,14 @@ scan:
 					result.Capped = true
 					break scan
 				}
-				var candTitle, candType, candContent string
-				_ = s.db.QueryRow(
-					`SELECT title, type, ifnull(content,'') FROM observations WHERE sync_id = ?`, c.SyncID,
-				).Scan(&candTitle, &candType, &candContent)
+				candSnippet, err := s.scanObservationSnippet(c.SyncID, c.ID)
+				if err != nil {
+					log.Printf("[store] ScanProject: candidate snippet obs=%s cand=%s: %v", obs.syncID, c.SyncID, err)
+					continue
+				}
 				semanticPairs = append(semanticPairs, candidatePair{
-					sourceSnippet: srcSnippet,
-					candidateSnippet: ObservationSnippet{
-						ID:      c.ID,
-						SyncID:  c.SyncID,
-						Title:   candTitle,
-						Type:    candType,
-						Content: candContent,
-					},
+					sourceSnippet:    srcSnippet,
+					candidateSnippet: candSnippet,
 				})
 				semanticPairKeys[pairKey] = struct{}{}
 			}
@@ -1645,6 +1634,20 @@ scan:
 	result.SemanticSkipped += counts.skipped
 	result.SemanticErrors += counts.errors
 	return result, nil
+}
+
+// scanObservationSnippet reads the fields the semantic prompt needs. A missing
+// or unreadable observation is returned to the caller instead of being turned
+// into an empty snippet, so the scan can skip the pair and keep its verdicts
+// grounded in real content.
+func (s *Store) scanObservationSnippet(syncID string, id int64) (ObservationSnippet, error) {
+	var title, typ, content string
+	if err := s.db.QueryRow(
+		`SELECT title, type, ifnull(content,'') FROM observations WHERE sync_id = ?`, syncID,
+	).Scan(&title, &typ, &content); err != nil {
+		return ObservationSnippet{}, fmt.Errorf("read observation snippet %q: %w", syncID, err)
+	}
+	return ObservationSnippet{ID: id, SyncID: syncID, Title: title, Type: typ, Content: content}, nil
 }
 
 // candidatePair represents a source+candidate pair to be semantically judged.
